@@ -34,3 +34,7 @@ async def set_message_id(order_id, message_id) -> None:
 
 async def set_status(order_id, status: str) -> None:
     await _col().update_one({"_id": ObjectId(str(order_id))}, {"$set": {"status": status}})
+
+
+async def set_status_by_message(message_id, status: str) -> None:
+    await _col().update_one({"messageId": str(message_id)}, {"$set": {"status": status}})

@@ -55,7 +55,7 @@ class Tip(commands.Cog):
             )
 
         await interaction.response.send_message(
-            "💖 Tip logged to the tip jar!",
+            "tip logged to the tip jar!",
             ephemeral=True,
         )
 

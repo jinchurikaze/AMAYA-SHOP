@@ -3,6 +3,7 @@ Roblox group eligibility, monitoring form, quick math).
 
 Run:   python main.py
 """
+
 import asyncio
 import importlib
 import logging
@@ -32,7 +33,8 @@ log = logging.getLogger("amaya")
 BASE = Path(__file__).resolve().parent
 
 MATH_RE = re.compile(
-    r"^amaya\s+(-?\d+(?:\.\d+)?)\s*([+\-*/])\s*(-?\d+(?:\.\d+)?)$", re.IGNORECASE | re.ASCII
+    r"^amaya\s+(-?\d+(?:\.\d+)?)\s*([+\-*/])\s*(-?\d+(?:\.\d+)?)$",
+    re.IGNORECASE | re.ASCII,
 )
 
 
@@ -40,9 +42,11 @@ MATH_RE = re.compile(
 def extract_game_pass_id(text):
     if not text:
         return None
+
     s = str(text).strip()
     if re.fullmatch(r"\d+", s, re.ASCII):
         return s
+
     patterns = [
         r"game-pass/(\d+)",
         r"gamepass/(\d+)",
@@ -51,30 +55,37 @@ def extract_game_pass_id(text):
         r"\b(?:gp|gamepass|game-pass)\D*(\d{5,})\b",
         r"id=(\d+)",
     ]
+
     for pat in patterns:
-        m = re.search(pat, s, re.IGNORECASE | re.ASCII)
-        if m:
-            return m.group(1)
+        match = re.search(pat, s, re.IGNORECASE | re.ASCII)
+        if match:
+            return match.group(1)
+
     return None
 
 
 def load_scan_module():
-    """Optional drop-in: scan.py exposing `async run_scan(id) -> {"ok": bool, "content": str}`
-    and (optionally) `extract_game_pass_id(text)`."""
+    """Load optional scan.py with an async run_scan(id) function."""
     try:
         return importlib.import_module("scan")
     except ModuleNotFoundError:
         log.error("❌ scan.py not found — the `scan` feature is disabled")
     except Exception:
         log.exception("❌ Failed to load scan.py")
+
     return None
 
 
 # ================= TREE (global slash-command error handler) =================
 class AmayaTree(app_commands.CommandTree):
-    async def on_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def on_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ):
         log.error("❌ Interaction error: %r", error, exc_info=error)
         msg = "❌ There was an error executing this command!"
+
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(msg, ephemeral=True)
@@ -99,6 +110,7 @@ class AmayaBot(commands.Bot):
             application_id=int(client_id) if client_id else None,
             help_command=None,
         )
+
         self.deploy_only = deploy_only
         self.session: aiohttp.ClientSession | None = None
         self.scan = None
@@ -110,9 +122,11 @@ class AmayaBot(commands.Bot):
     # ---------- startup ----------
     async def load_cogs(self):
         cogs_dir = BASE / "cogs"
+
         for file in sorted(cogs_dir.glob("*.py")):
             if file.name.startswith("_"):
                 continue
+
             try:
                 await self.load_extension(f"cogs.{file.stem}")
                 log.info("✅ Loaded cog: %s", file.stem)
@@ -121,6 +135,7 @@ class AmayaBot(commands.Bot):
 
     async def setup_hook(self):
         await self.load_cogs()
+
         if self.deploy_only:
             return
 
@@ -134,15 +149,17 @@ class AmayaBot(commands.Bot):
         self._web_runner = await start_keepalive()
         self.scan = load_scan_module()
 
-        # persistent buttons (keep working after restarts)
+        # Persistent buttons (keep working after restarts).
         self.add_view(OrderButtons())
         self.add_view(MonitorFormView())
 
     async def close(self):
         if self.session:
             await self.session.close()
+
         if self._web_runner:
             await self._web_runner.cleanup()
+
         await super().close()
 
     # ---------- events ----------
@@ -154,6 +171,7 @@ class AmayaBot(commands.Bot):
         try:
             name = os.getenv("ACTIVITY_NAME", "amaya")
             kind = os.getenv("BOT_ACTIVITY", "PLAYING").upper()
+
             types = {
                 "PLAYING": discord.ActivityType.playing,
                 "WATCHING": discord.ActivityType.watching,
@@ -161,11 +179,14 @@ class AmayaBot(commands.Bot):
                 "COMPETING": discord.ActivityType.competing,
                 "STREAMING": discord.ActivityType.streaming,
             }
-            atype = types.get(kind, discord.ActivityType.playing)
+
+            activity_type = types.get(kind, discord.ActivityType.playing)
+
             await self.change_presence(
-                activity=discord.Activity(type=atype, name=name), status=discord.Status.online
+                activity=discord.Activity(type=activity_type, name=name),
+                status=discord.Status.dnd,
             )
-            log.info("✅ Presence set: %s %s | status=online", kind, name)
+            log.info("✅ Presence set: %s %s | status=dnd", kind, name)
         except Exception:
             log.exception("❌ Failed to set presence")
 
@@ -179,7 +200,7 @@ class AmayaBot(commands.Bot):
         log.info("🔄 Shard %s resumed", shard_id)
 
     async def on_app_command_completion(self, interaction, command):
-        # refresh sticky after any slash command except /sticky itself
+        # Refresh sticky after any slash command except /sticky itself.
         if command.qualified_name.split()[0] != "sticky":
             self.schedule_sticky_refresh(interaction.channel)
 
@@ -194,17 +215,23 @@ class AmayaBot(commands.Bot):
         task.add_done_callback(self._tasks.discard)
 
     async def refresh_sticky(self, channel):
-        if channel is None or not getattr(channel, "id", None) or not hasattr(channel, "send"):
+        if (
+            channel is None
+            or not getattr(channel, "id", None)
+            or not hasattr(channel, "send")
+        ):
             return
 
         data = load_sticky_data()
         sticky = data.get(str(channel.id))
+
         if not sticky:
             return
 
         now = time.time()
         if now - self.sticky_cooldowns.get(channel.id, 0) < 3:
             return
+
         self.sticky_cooldowns[channel.id] = now
 
         try:
@@ -213,11 +240,30 @@ class AmayaBot(commands.Bot):
                     old = await channel.fetch_message(int(sticky["messageId"]))
                     await old.delete()
                 except Exception:
-                    pass  # old sticky may already be gone
+                    pass  # The old sticky may already be gone.
+
+            # Rebuild up to two link buttons from the saved sticky data.
+            buttons = sticky.get("buttons", [])
+            view = None
+
+            if buttons:
+                view = discord.ui.View(timeout=None)
+
+                for button in buttons[:2]:
+                    view.add_item(
+                        discord.ui.Button(
+                            label=button["label"],
+                            style=discord.ButtonStyle.link,
+                            url=button["url"],
+                        )
+                    )
 
             new = await channel.send(
-                sticky["content"], allowed_mentions=discord.AllowedMentions.none()
+                sticky["content"],
+                view=view,
+                allowed_mentions=discord.AllowedMentions.none(),
             )
+
             data[str(channel.id)]["messageId"] = str(new.id)
             save_sticky_data(data)
         except Exception:
@@ -227,12 +273,18 @@ class AmayaBot(commands.Bot):
     async def handle_scan(self, message: discord.Message, input_text: str):
         try:
             if not self.scan or not hasattr(self.scan, "run_scan"):
-                return await message.reply("❌ Scan command is not available right now.")
+                return await message.reply(
+                    "❌ Scan command is not available right now."
+                )
+
             result = await self.scan.run_scan(input_text)
+
             if not result or not result.get("ok"):
                 return await message.reply(
-                    (result or {}).get("content") or "❌ Error fetching game pass info."
+                    (result or {}).get("content")
+                    or "❌ Error fetching game pass info."
                 )
+
             return await message.reply(result["content"])
         except Exception:
             log.exception("❌ Scan error")
@@ -247,14 +299,17 @@ class AmayaBot(commands.Bot):
             content = message.content
 
             # ===== MATH FEATURE =====
-            m = MATH_RE.match(content.strip())
-            if m:
-                a, op, b = float(m.group(1)), m.group(2), float(m.group(3))
-                if op == "+":
+            match = MATH_RE.match(content.strip())
+            if match:
+                a = float(match.group(1))
+                operator = match.group(2)
+                b = float(match.group(3))
+
+                if operator == "+":
                     result = a + b
-                elif op == "-":
+                elif operator == "-":
                     result = a - b
-                elif op == "*":
+                elif operator == "*":
                     result = a * b
                 else:
                     if b == 0:
@@ -262,11 +317,14 @@ class AmayaBot(commands.Bot):
                         return
                     result = a / b
 
-                # trim floating point noise (JS Math.round semantics: half rounds up)
+                # Trim floating point noise (JS Math.round semantics: half rounds up).
                 if math.isfinite(result):
                     result = math.floor(result * 10000 + 0.5) / 10000
 
-                await message.reply(f" **{js_num(a)} {op} {js_num(b)} = {js_num(result)}**")
+                await message.reply(
+                    f" **{js_num(a)} {operator} {js_num(b)} = "
+                    f"{js_num(result)}**"
+                )
                 self.schedule_sticky_refresh(message.channel)
                 return
 
@@ -276,33 +334,50 @@ class AmayaBot(commands.Bot):
 
             if lowered == "scan" and message.reference:
                 try:
-                    replied = await message.channel.fetch_message(message.reference.message_id)
+                    replied = await message.channel.fetch_message(
+                        message.reference.message_id
+                    )
+
                     if replied.content:
                         scan_input = replied.content
+
                     if not scan_input and replied.embeds:
-                        e = replied.embeds[0]
-                        if e.url:
-                            scan_input = e.url
-                        if not scan_input and e.description:
-                            scan_input = e.description
-                        if not scan_input and e.title:
-                            scan_input = e.title
+                        embed = replied.embeds[0]
+
+                        if embed.url:
+                            scan_input = embed.url
+                        if not scan_input and embed.description:
+                            scan_input = embed.description
+                        if not scan_input and embed.title:
+                            scan_input = embed.title
                 except Exception:
                     log.exception("❌ Reply fetch error")
                     return
+
             elif lowered.startswith("scan "):
                 scan_input = content[5:].strip()
 
             if scan_input:
-                finder = getattr(self.scan, "extract_game_pass_id", None) or extract_game_pass_id
+                finder = (
+                    getattr(self.scan, "extract_game_pass_id", None)
+                    or extract_game_pass_id
+                )
                 pass_id = finder(scan_input)
+
                 if not pass_id:
-                    return await message.reply("❌ Invalid Roblox game pass link or ID.")
+                    return await message.reply(
+                        "❌ Invalid Roblox game pass link or ID."
+                    )
 
                 if message.id in self.processed_messages:
                     return
+
                 self.processed_messages.add(message.id)
-                asyncio.get_running_loop().call_later(10, self.processed_messages.discard, message.id)
+                asyncio.get_running_loop().call_later(
+                    10,
+                    self.processed_messages.discard,
+                    message.id,
+                )
 
                 await self.handle_scan(message, pass_id)
                 self.schedule_sticky_refresh(message.channel)
@@ -310,6 +385,7 @@ class AmayaBot(commands.Bot):
 
             # ===== STICKY FEATURE =====
             await self.refresh_sticky(message.channel)
+
         except Exception:
             log.exception("❌ on_message handler crashed")
 
@@ -318,11 +394,13 @@ class AmayaBot(commands.Bot):
 async def run():
     token = os.getenv("BOT_TOKEN")
     log.info("🔐 BOT_TOKEN exists: %s", bool(token))
+
     if not token:
         log.error("❌ Missing BOT_TOKEN in environment variables.")
         sys.exit(1)
 
     bot = AmayaBot()
+
     async with bot:
         try:
             log.info("🔄 Attempting to login to Discord...")
@@ -334,6 +412,7 @@ async def run():
 
 if __name__ == "__main__":
     discord.utils.setup_logging(level=logging.INFO)
+
     try:
         asyncio.run(run())
     except KeyboardInterrupt:
