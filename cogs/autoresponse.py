@@ -55,12 +55,17 @@ class AutoResponse(commands.GroupCog, name="autoresponse", description="Manage a
     async def list_(self, interaction: discord.Interaction):
         entries = await get_db()["auto_responses"].find(
             {"guild_id": str(interaction.guild_id)}
-        ).sort("trigger_key", 1).to_list(length=50)
+        ).sort("trigger_key", 1).to_list(length=10)
         if not entries:
             return await interaction.response.send_message(
                 "No auto-responses are configured.", ephemeral=True
             )
-        lines = [f"• **{entry['trigger']}** → {entry['response'][:120]}" for entry in entries]
+        lines = [
+            f"• **{entry['trigger']}** → {entry['response'][:100]}"
+            for entry in entries
+        ]
+        if len(entries) == 10:
+            lines.append("Showing the first 10 triggers.")
         await interaction.response.send_message(
             "\n".join(lines), ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
         )
