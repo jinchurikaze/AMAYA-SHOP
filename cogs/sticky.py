@@ -275,5 +275,18 @@ class Sticky(commands.GroupCog, name="sticky", description="Manage sticky messag
         )
 
 
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Bot-generated embeds also count as channel activity. Ignore our own sticky
+        # reposts so refreshing cannot loop.
+        if not message.author.bot:
+            return
+        if self.bot.user and message.author.id == self.bot.user.id:
+            return
+        schedule = getattr(self.bot, "schedule_sticky_refresh", None)
+        if schedule:
+            schedule(message.channel)
+
+
 async def setup(bot):
     await bot.add_cog(Sticky(bot))
