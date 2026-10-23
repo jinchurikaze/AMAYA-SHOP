@@ -1,5 +1,5 @@
 """Amaya — multi-purpose Discord bot (order queue, deliveries, sticky messages,
-Roblox group eligibility, monitoring form, quick math).
+monitoring form, quick math).
 
 Run:   python main.py
 """
