@@ -31,6 +31,23 @@ def role_ids_in(content):
     return sorted(set(ROLE_MENTION_RE.findall(content or "")))
 
 
+def role_ids_in_embeds(embeds):
+    found = set()
+
+    def scan(value):
+        if isinstance(value, str):
+            found.update(ROLE_MENTION_RE.findall(value))
+        elif isinstance(value, dict):
+            for nested in value.values():
+                scan(nested)
+        elif isinstance(value, (list, tuple)):
+            for nested in value:
+                scan(nested)
+
+    scan(embeds)
+    return found
+
+
 def make_allowed_mentions(guild, sticky):
     role_ids = sticky.get("allowed_role_ids")
     if role_ids is None:
@@ -208,6 +225,13 @@ class Sticky(commands.GroupCog, name="sticky", description="Manage sticky messag
 
         role_ids = {str(role.id) for role in source.role_mentions}
         role_ids.update(role_ids_in(content))
+        embed_role_ids = role_ids_in_embeds(embeds)
+        role_ids.update(embed_role_ids)
+        missing_content_pings = sorted(embed_role_ids - set(role_ids_in(content)))
+        if missing_content_pings:
+            pings = " ".join(f"<@&{role_id}>" for role_id in missing_content_pings)
+            content = f"{pings} {content}".strip()
+
         sticky = {
             "content": content,
             "embeds": embeds,
