@@ -15,7 +15,6 @@ def make_view(buttons):
         return None
 
     view = discord.ui.View(timeout=None)
-
     for button in buttons[:2]:
         view.add_item(
             discord.ui.Button(
@@ -25,7 +24,6 @@ def make_view(buttons):
                 emoji=button.get("emoji"),
             )
         )
-
     return view
 
 
@@ -48,7 +46,6 @@ def make_allowed_mentions(guild, sticky):
             if role:
                 roles.append(role)
 
-    # Only roles explicitly present in the sticky content can ping.
     return discord.AllowedMentions(
         everyone=False,
         users=False,
@@ -95,7 +92,6 @@ async def post_sticky(channel, sticky):
 async def delete_old_sticky(channel, message_id):
     if channel is None or not message_id:
         return
-
     try:
         old = await channel.fetch_message(int(message_id))
         await old.delete()
@@ -157,6 +153,8 @@ class Sticky(commands.GroupCog, name="sticky", description="Manage sticky messag
                 })
 
         data = load_sticky_data()
+        key = str(channel.id)
+        previous = data.get(key, {})
         sticky = {
             "content": message,
             "embeds": [],
@@ -165,13 +163,9 @@ class Sticky(commands.GroupCog, name="sticky", description="Manage sticky messag
         }
         sent = await post_sticky(channel, sticky)
         sticky["messageId"] = str(sent.id)
-        data[str(channel.id)] = sticky
+        data[key] = sticky
         save_sticky_data(data)
-        await delete_old_sticky(
-            channel,
-            (data.get(str(channel.id)) or {}).get("messageId")
-            if False else None,
-        )
+        await delete_old_sticky(channel, previous.get("messageId"))
 
         await interaction.response.send_message(
             "Sticky message set for this channel.", ephemeral=True
@@ -212,15 +206,14 @@ class Sticky(commands.GroupCog, name="sticky", description="Manage sticky messag
                 ephemeral=True,
             )
 
+        role_ids = {str(role.id) for role in source.role_mentions}
+        role_ids.update(role_ids_in(content))
         sticky = {
             "content": content,
             "embeds": embeds,
             "buttons": buttons,
-            "allowed_role_ids": sorted({str(role.id) for role in source.role_mentions}),
+            "allowed_role_ids": sorted(role_ids),
         }
-        role_ids = set(sticky["allowed_role_ids"])
-        role_ids.update(role_ids_in(content))
-        sticky["allowed_role_ids"] = sorted(role_ids)
 
         await interaction.response.defer(ephemeral=True)
         try:
@@ -232,9 +225,10 @@ class Sticky(commands.GroupCog, name="sticky", description="Manage sticky messag
             )
 
         data = load_sticky_data()
-        previous = data.get(str(channel.id), {})
+        key = str(channel.id)
+        previous = data.get(key, {})
         sticky["messageId"] = str(sent.id)
-        data[str(channel.id)] = sticky
+        data[key] = sticky
         save_sticky_data(data)
         await delete_old_sticky(channel, previous.get("messageId"))
         await interaction.followup.send(
