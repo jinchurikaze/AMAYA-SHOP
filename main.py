@@ -26,7 +26,8 @@ import database  # noqa: E402
 from buttons import OrderButtons  # noqa: E402
 from keepalive import start_keepalive  # noqa: E402
 from monitoring import MonitorFormView  # noqa: E402
-from sticky_data import load_sticky_data, save_sticky_data  # noqa: E402
+from sticky_data import load_sticky_data, save_sticky_data
+from cogs.sticky import post_sticky  # noqa: E402
 from utils import js_num  # noqa: E402
 
 log = logging.getLogger("amaya")
@@ -242,28 +243,7 @@ class AmayaBot(commands.Bot):
                 except Exception:
                     pass  # The old sticky may already be gone.
 
-            # Rebuild up to two link buttons from the saved sticky data.
-            buttons = sticky.get("buttons", [])
-            view = None
-
-            if buttons:
-                view = discord.ui.View(timeout=None)
-
-                for button in buttons[:2]:
-                    view.add_item(
-                        discord.ui.Button(
-                            label=button["label"],
-                            style=discord.ButtonStyle.link,
-                            url=button["url"],
-                        )
-                    )
-
-            new = await channel.send(
-                sticky["content"],
-                view=view,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
-
+            new = await post_sticky(channel, sticky)
             data[str(channel.id)]["messageId"] = str(new.id)
             save_sticky_data(data)
         except Exception:
