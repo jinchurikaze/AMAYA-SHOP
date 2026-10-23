@@ -137,9 +137,6 @@ class Queue(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
 
-            await interaction.response.defer(ephemeral=True)
-                 
-
         except Exception:
             log.exception("Failed to create queue order")
             await interaction.edit_original_response(
