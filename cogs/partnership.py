@@ -37,9 +37,13 @@ class Partnership(commands.GroupCog, name="partnership", description="Track part
         for entry in entries:
             timestamp = entry.get("created_at")
             stamp = discord.utils.format_dt(timestamp, style="R") if timestamp else "unknown time"
+            post_url = (
+                f"https://discord.com/channels/{entry.get('guild_id')}/"
+                f"{entry.get('channel_id')}/{entry.get('message_id')}"
+            )
             lines.append(
                 f"• {entry.get('invite_url', 'link unavailable')} — "
-                f"<@{entry.get('manager_id')}> · {stamp}"
+                f"<@{entry.get('manager_id')}> · {stamp} · [post]({post_url})"
             )
         await interaction.response.send_message(
             "\n".join(lines),
