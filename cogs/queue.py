@@ -76,8 +76,10 @@ class Queue(commands.Cog):
                 ephemeral=True,
             )
 
-        # Acknowledge privately while the database and channel messages are handled.
-        await interaction.response.defer(ephemeral=True)
+        # Send an immediate private acknowledgement, then replace it with the result.
+        await interaction.response.send_message(
+            "Adding your order to the queue...", ephemeral=True
+        )
         customer = deliver_to or interaction.user
         payment_method = payment.value.lower()
 
@@ -98,7 +100,7 @@ class Queue(commands.Cog):
             message = (
                 "\u2800\n"
                 "         **order confirmation** "
-                "<:040:1498665961354694767>\n"
+                "\n"
                 f"  •    **[queued]({command_channel_url}) ；"
                 f"{quantity}．{item}**\n"
                 f"  •    paid by―  {payment_method}，₱{price}\n"
@@ -132,9 +134,13 @@ class Queue(commands.Cog):
                 )
             )
             await command_channel.send(
-                "♡ order confirmation added to the queue!",
+                "Order confirmation added to the queue.",
                 view=view,
                 allowed_mentions=discord.AllowedMentions.none(),
+            )
+
+            await interaction.edit_original_response(
+                content="Order added to the queue."
             )
 
         except Exception:

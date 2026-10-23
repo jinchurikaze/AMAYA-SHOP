@@ -27,7 +27,7 @@ class MonitoringModal(discord.ui.Modal, title="Monitoring Form"):
             )
             return
 
-        embed = discord.Embed(color=0xFFB6C1, title="📋 New Monitoring Form")
+        embed = discord.Embed(color=0xFFB6C1, title="New Monitoring Form")
         embed.add_field(name="Item's email/number", value=self.email.value, inline=False)
         embed.add_field(name="Profile", value=self.profile.value, inline=True)
         embed.add_field(name="Solo / Shared", value=self.sharing.value, inline=True)
@@ -45,14 +45,14 @@ class MonitoringModal(discord.ui.Modal, title="Monitoring Form"):
             channel = await interaction.client.fetch_channel(int(channel_id))
             await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
         except Exception as err:
-            log.error("❌ Monitoring form send failed: %s", err)
+            log.error(" Monitoring form send failed: %s", err)
             await interaction.response.send_message(
-                "❌ Couldn't submit your form. Please open a ticket."
+                "  Couldn't submit your form. Please open a ticket."
             )
             return
 
         await interaction.response.send_message(
-            "✅ Monitoring form submitted! Your warranty is now active. Thank you 💖"
+            "Monitoring form submitted. Thank you."
         )
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):

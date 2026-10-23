@@ -7,25 +7,24 @@ from discord.ext import commands
 
 
 log = logging.getLogger("amaya.ticket")
-TICKET_NUMBER_RE = re.compile(r"[.．](\d+)$")
+TICKET_SUFFIX_RE = re.compile(r"[.．]([^.]*)$")
 
 
-def renamed_ticket_channel(current_name: str, requested_name: str) -> str | None:
-    """Normalize a requested label and keep the existing ticket number suffix."""
-    number_match = TICKET_NUMBER_RE.search(current_name)
-    requested = requested_name.strip()
-    requested_suffix = TICKET_NUMBER_RE.search(requested)
-    if requested_suffix:
-        requested = requested[:requested_suffix.start()]
-
-    base = re.sub(r"[^a-z0-9-]+", "-", requested.casefold()).strip("-")
-    base = re.sub(r"-{2,}", "-", base).strip("-")
-    if not base:
+def renamed_ticket_channel(before_dot: str, after_dot: str) -> str | None:
+    """Build a normalized ticket channel name from both sides of its separator."""
+    before = re.sub(r"[^a-z0-9-]+", "-", before_dot.casefold()).strip("-")
+    after = re.sub(r"[^a-z0-9-]+", "-", after_dot.casefold()).strip("-")
+    before = re.sub(r"-{2,}", "-", before)
+    after = re.sub(r"-{2,}", "-", after)
+    if not before or not after:
         return None
 
-    if number_match:
-        return f"{base}．{number_match.group(1)}"[:100]
-    return base[:100]
+    # Discord channel names have a 100-character maximum.
+    available = 99  # one character is reserved for the fullwidth dot
+    if len(before) + len(after) > available:
+        before = before[: max(1, available - len(after))]
+        after = after[: available - len(before)]
+    return f"{before}．{after}"
 
 
 class Ticket(commands.GroupCog, name="ticket", description="Manage ticket channels"):
@@ -35,8 +34,16 @@ class Ticket(commands.GroupCog, name="ticket", description="Manage ticket channe
 
     @app_commands.guild_only()
     @app_commands.command(name="rename", description="Rename the current ticket channel")
-    @app_commands.describe(name="New ticket name; the ticket number is kept automatically")
-    async def rename(self, interaction: discord.Interaction, name: str):
+    @app_commands.describe(
+        before_dot="Text before the dot (for example, 1000)",
+        after_dot="Text after the dot (for example, vp)",
+    )
+    async def rename(
+        self,
+        interaction: discord.Interaction,
+        before_dot: str,
+        after_dot: str,
+    ):
         # Acknowledge first so permission checks and Discord's channel edit cannot
         # leave the command showing “The application did not respond”.
         await interaction.response.defer(ephemeral=True)
@@ -57,24 +64,24 @@ class Ticket(commands.GroupCog, name="ticket", description="Manage ticket channe
                 ephemeral=True,
             )
 
-        ticket_number = TICKET_NUMBER_RE.search(channel.name)
+        ticket_suffix = TICKET_SUFFIX_RE.search(channel.name)
         category_name = channel.category.name.casefold() if channel.category else ""
         is_ticket = (
             "ticket" in channel.name.casefold()
             or "ticket" in category_name
-            or ticket_number is not None
+            or ticket_suffix is not None
         )
         if not is_ticket:
             return await interaction.followup.send(
                 "This channel doesn't look like a ticket. Ticket names ending in "
-                "a number, such as order．1194, are supported.",
+                "a dot-separated name, such as order．1194, are supported.",
                 ephemeral=True,
             )
 
-        clean_name = renamed_ticket_channel(channel.name, name)
+        clean_name = renamed_ticket_channel(before_dot, after_dot)
         if not clean_name:
             return await interaction.followup.send(
-                "Enter a ticket name containing letters or numbers.",
+                "Enter letters or numbers on both sides of the dot.",
                 ephemeral=True,
             )
 
@@ -98,7 +105,7 @@ class Ticket(commands.GroupCog, name="ticket", description="Manage ticket channe
             )
 
         await interaction.followup.send(
-            f"✅ Ticket renamed to **{clean_name}**.", ephemeral=True
+            f" Ticket renamed to **{clean_name}**.", ephemeral=True
         )
 
 

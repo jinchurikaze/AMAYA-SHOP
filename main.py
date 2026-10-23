@@ -5,7 +5,6 @@ Run:   python main.py
 """
 
 import asyncio
-import importlib
 import logging
 import math
 import os
@@ -37,44 +36,6 @@ MATH_RE = re.compile(
     r"^amaya\s+(-?\d+(?:\.\d+)?)\s*([+\-*/])\s*(-?\d+(?:\.\d+)?)$",
     re.IGNORECASE | re.ASCII,
 )
-
-
-# ================= SCAN HELPERS =================
-def extract_game_pass_id(text):
-    if not text:
-        return None
-
-    s = str(text).strip()
-    if re.fullmatch(r"\d+", s, re.ASCII):
-        return s
-
-    patterns = [
-        r"game-pass/(\d+)",
-        r"gamepass/(\d+)",
-        r"game-passes/(\d+)",
-        r"/passes/(\d+)",
-        r"\b(?:gp|gamepass|game-pass)\D*(\d{5,})\b",
-        r"id=(\d+)",
-    ]
-
-    for pat in patterns:
-        match = re.search(pat, s, re.IGNORECASE | re.ASCII)
-        if match:
-            return match.group(1)
-
-    return None
-
-
-def load_scan_module():
-    """Load optional scan.py with an async run_scan(id) function."""
-    try:
-        return importlib.import_module("scan")
-    except ModuleNotFoundError:
-        log.error("❌ scan.py not found — the `scan` feature is disabled")
-    except Exception:
-        log.exception("❌ Failed to load scan.py")
-
-    return None
 
 
 # ================= TREE (global slash-command error handler) =================
@@ -114,9 +75,7 @@ class AmayaBot(commands.Bot):
 
         self.deploy_only = deploy_only
         self.session: aiohttp.ClientSession | None = None
-        self.scan = None
         self.sticky_cooldowns: dict[int, float] = {}
-        self.processed_messages: set[int] = set()
         self._tasks: set[asyncio.Task] = set()
         self._web_runner = None
 
@@ -148,7 +107,6 @@ class AmayaBot(commands.Bot):
 
         self.session = aiohttp.ClientSession()
         self._web_runner = await start_keepalive()
-        self.scan = load_scan_module()
 
         # Persistent buttons (keep working after restarts).
         self.add_view(OrderButtons())
@@ -249,27 +207,6 @@ class AmayaBot(commands.Bot):
         except Exception:
             log.exception("❌ Sticky refresh error")
 
-    # ---------- scan ----------
-    async def handle_scan(self, message: discord.Message, input_text: str):
-        try:
-            if not self.scan or not hasattr(self.scan, "run_scan"):
-                return await message.reply(
-                    "❌ Scan command is not available right now."
-                )
-
-            result = await self.scan.run_scan(input_text)
-
-            if not result or not result.get("ok"):
-                return await message.reply(
-                    (result or {}).get("content")
-                    or "❌ Error fetching game pass info."
-                )
-
-            return await message.reply(result["content"])
-        except Exception:
-            log.exception("❌ Scan error")
-            return await message.reply("❌ Error fetching game pass info.")
-
     # ---------- messages ----------
     async def on_message(self, message: discord.Message):
         try:
@@ -305,61 +242,6 @@ class AmayaBot(commands.Bot):
                     f" **{js_num(a)} {operator} {js_num(b)} = "
                     f"{js_num(result)}**"
                 )
-                self.schedule_sticky_refresh(message.channel)
-                return
-
-            # ===== SCAN FEATURE =====
-            scan_input = None
-            lowered = content.lower()
-
-            if lowered == "scan" and message.reference:
-                try:
-                    replied = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
-
-                    if replied.content:
-                        scan_input = replied.content
-
-                    if not scan_input and replied.embeds:
-                        embed = replied.embeds[0]
-
-                        if embed.url:
-                            scan_input = embed.url
-                        if not scan_input and embed.description:
-                            scan_input = embed.description
-                        if not scan_input and embed.title:
-                            scan_input = embed.title
-                except Exception:
-                    log.exception("❌ Reply fetch error")
-                    return
-
-            elif lowered.startswith("scan "):
-                scan_input = content[5:].strip()
-
-            if scan_input:
-                finder = (
-                    getattr(self.scan, "extract_game_pass_id", None)
-                    or extract_game_pass_id
-                )
-                pass_id = finder(scan_input)
-
-                if not pass_id:
-                    return await message.reply(
-                        "❌ Invalid Roblox game pass link or ID."
-                    )
-
-                if message.id in self.processed_messages:
-                    return
-
-                self.processed_messages.add(message.id)
-                asyncio.get_running_loop().call_later(
-                    10,
-                    self.processed_messages.discard,
-                    message.id,
-                )
-
-                await self.handle_scan(message, pass_id)
                 self.schedule_sticky_refresh(message.channel)
                 return
 
