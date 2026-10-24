@@ -114,6 +114,8 @@ class Queue(commands.Cog):
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             await order_model.set_message_id(order["_id"], sent.id)
+            # Move the configured sticky to the bottom after each queued order.
+            self.bot.schedule_sticky_refresh(order_list, force=True)
 
             for emoji in reactions_from_env():
                 try:
@@ -155,3 +157,4 @@ class Queue(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Queue(bot))
+
