@@ -76,6 +76,7 @@ class AmayaBot(commands.Bot):
         self.deploy_only = deploy_only
         self.session: aiohttp.ClientSession | None = None
         self.sticky_cooldowns: dict[int, float] = {}
+        self.sticky_refresh_locks: dict[int, asyncio.Lock] = {}
         self._tasks: set[asyncio.Task] = set()
         self._web_runner = None
 
@@ -164,16 +165,16 @@ class AmayaBot(commands.Bot):
             self.schedule_sticky_refresh(interaction.channel)
 
     # ---------- sticky ----------
-    def schedule_sticky_refresh(self, channel, delay: float = 1.0):
+    def schedule_sticky_refresh(self, channel, delay: float = 1.0, *, force: bool = False):
         async def _later():
             await asyncio.sleep(delay)
-            await self.refresh_sticky(channel)
+            await self.refresh_sticky(channel, force=force)
 
         task = asyncio.create_task(_later())
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def refresh_sticky(self, channel):
+    async def refresh_sticky(self, channel, *, force: bool = False):
         if (
             channel is None
             or not getattr(channel, "id", None)
@@ -181,32 +182,31 @@ class AmayaBot(commands.Bot):
         ):
             return
 
-        data = load_sticky_data()
-        sticky = data.get(str(channel.id))
+        lock = self.sticky_refresh_locks.setdefault(channel.id, asyncio.Lock())
+        async with lock:
+            data = load_sticky_data()
+            sticky = data.get(str(channel.id))
+            if not sticky:
+                return
 
-        if not sticky:
-            return
+            now = time.time()
+            if not force and now - self.sticky_cooldowns.get(channel.id, 0) < 3:
+                return
+            self.sticky_cooldowns[channel.id] = now
 
-        now = time.time()
-        if now - self.sticky_cooldowns.get(channel.id, 0) < 3:
-            return
+            try:
+                if sticky.get("messageId"):
+                    try:
+                        old = await channel.fetch_message(int(sticky["messageId"]))
+                        await old.delete()
+                    except Exception:
+                        pass  # The old sticky may already be gone.
 
-        self.sticky_cooldowns[channel.id] = now
-
-        try:
-            if sticky.get("messageId"):
-                try:
-                    old = await channel.fetch_message(int(sticky["messageId"]))
-                    await old.delete()
-                except Exception:
-                    pass  # The old sticky may already be gone.
-
-            new = await post_sticky(channel, sticky)
-            data[str(channel.id)]["messageId"] = str(new.id)
-            save_sticky_data(data)
-        except Exception:
-            log.exception("❌ Sticky refresh error")
-
+                new = await post_sticky(channel, sticky)
+                data[str(channel.id)]["messageId"] = str(new.id)
+                save_sticky_data(data)
+            except Exception:
+                log.exception("❌ Sticky refresh error")
     # ---------- messages ----------
     async def on_message(self, message: discord.Message):
         try:
@@ -279,3 +279,4 @@ if __name__ == "__main__":
         asyncio.run(run())
     except KeyboardInterrupt:
         pass
+
