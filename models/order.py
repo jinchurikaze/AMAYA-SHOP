@@ -10,7 +10,9 @@ def _col():
     return get_db()["orders"]
 
 
-async def create_order(*, user_id, username, item, quantity, price, payment) -> dict:
+async def create_order(
+    *, user_id, username, item, quantity: str, price: float, payment
+) -> dict:
     doc = {
         "userId": str(user_id),
         "username": username,
