@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 
 import discord
@@ -26,9 +27,9 @@ class Queue(commands.Cog):
     )
     @app_commands.describe(
         item="Item ordered",
-        quantity="Quantity of the item",
+        quantity="Quantity or amount (for example, 2, 1k, or 2 packs)",
         payment="Payment method",
-        price="Total price paid in pesos",
+        price="Total price paid in pesos (decimals are allowed)",
         deliver_to="Who will receive the order (defaults to you)",
     )
     @app_commands.choices(
@@ -45,9 +46,9 @@ class Queue(commands.Cog):
         self,
         interaction: discord.Interaction,
         item: str,
-        quantity: app_commands.Range[int, 1],
+        quantity: str,
         payment: app_commands.Choice[str],
-        price: app_commands.Range[int, 0],
+        price: app_commands.Range[float, 0],
         deliver_to: discord.Member = None,
     ):
         channel_id = os.getenv("ORDERLIST_CHANNEL_ID")
@@ -76,6 +77,20 @@ class Queue(commands.Cog):
                 ephemeral=True,
             )
 
+        quantity = quantity.strip()
+        if not quantity or len(quantity) > 100:
+            return await interaction.response.send_message(
+                "Quantity must contain between 1 and 100 characters.",
+                ephemeral=True,
+            )
+        if not math.isfinite(price):
+            return await interaction.response.send_message(
+                "Enter a valid price.", ephemeral=True
+            )
+        price = float(price)
+        price_display = str(price)
+        if price_display.endswith(".0"):
+            price_display = price_display[:-2]
         # Send an immediate private acknowledgement, then replace it with the result.
         await interaction.response.send_message(
             "Adding your order to the queue...", ephemeral=True
@@ -103,7 +118,7 @@ class Queue(commands.Cog):
                 "\n"
                 f"  •    **[queued]({command_channel_url}) ；"
                 f"{quantity}．{item}**\n"
-                f"  •    paid by―  {payment_method}，₱{price}\n"
+                f"  •    paid by―  {payment_method}，₱{price_display}\n"
                 f"  •    deliver to〝{customer.mention}\n"
                 "\u2800"
             )
