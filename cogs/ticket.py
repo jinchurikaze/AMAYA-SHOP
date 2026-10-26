@@ -160,17 +160,6 @@ class Ticket(commands.GroupCog, name="ticket", description="Manage ticket channe
                 ephemeral=True,
             )
 
-        ticket_suffix = TICKET_SUFFIX_RE.search(channel.name)
-        category_name = channel.category.name.casefold() if channel.category else ""
-        is_ticket = (
-            "ticket" in channel.name.casefold()
-            or "ticket" in category_name
-            or ticket_suffix is not None
-        )
-        if not is_ticket:
-            return await interaction.followup.send(
-                "This channel doesn't look like a ticket.", ephemeral=True
-            )
 
         bot_member = guild.me
         if bot_member is None or not channel.permissions_for(bot_member).manage_channels:
